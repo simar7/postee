@@ -73,11 +73,13 @@ func (ctx *JiraAPI) fetchBoardId(boardName string) {
 		return
 	}
 
-	boardlist, _, err := client.Board.GetAllBoards(&jira.BoardListOptions{ProjectKeyOrID: ctx.projectKey})
+	boardlist, response, err := client.Board.GetAllBoards(&jira.BoardListOptions{ProjectKeyOrID: ctx.projectKey})
 	if err != nil {
 		log.Printf("failed to get boards from Jira API GetAllBoards with ProjectID %s. %s", ctx.projectKey, err)
 		return
 	}
+	log.Printf("Response status: %v\n", (*response).Status)
+	log.Printf("Response Header: %v\n", (*response).Header)
 	var matches int
 	for _, board := range boardlist.Values {
 		if board.Name == boardName {
@@ -89,7 +91,8 @@ func (ctx *JiraAPI) fetchBoardId(boardName string) {
 	if matches > 1 {
 		log.Printf("found more than one boards with name %q, working with board id %d", boardName, ctx.BoardId)
 	} else if matches == 0 {
-		log.Printf("no boards found with name %s when getting all boards for user", boardName)
+		log.Printf("No boards found with name %q when getting all boards for user %q\n", boardName, ctx.user)
+		log.Printf("Project key is: %q\n", ctx.projectKey)
 		return
 	} else {
 		log.Printf("using board ID %d with Name %s", ctx.BoardId, boardName)
@@ -214,7 +217,7 @@ func (ctx *JiraAPI) Send(jsonSource string) error {
 		return err
 	}
 
-	ctx.fetchSprintId(*client)
+	//ctx.fetchSprintId(*client)
 
 	metaProject, err := createMetaProject(client, ctx.projectKey)
 	if err != nil {
