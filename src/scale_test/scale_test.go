@@ -58,7 +58,7 @@ func TestMain(m *testing.M)  {
 }
 
 func TestSendSameMessages(t *testing.T) {
-	t.Logf("Start sending %d message to %s:%s", count, url, port)
+	t.Logf("Start sending %d messages to %s:%s", count, url, port)
 	imageId := 999
 	regId := 999
 	for i:=0; i < count; i++ {
@@ -74,7 +74,7 @@ func TestSendSameMessages(t *testing.T) {
 }
 
 func TestSendUniqueMessages(t *testing.T) {
-	t.Logf("Start sendting %d message to %s:%s", count, url, port)
+	t.Logf("Start sending %d messages to %s:%s", count, url, port)
 	for i:=0; i < count; i++ {
 		wg.Add(1)
 		go func(imageId, regId int) {
