@@ -51,3 +51,6 @@ cover :
 	go tool cover -html=dbservice.out
 	go tool cover -html=alertmgr.out
 	go tool cover -html=formatting.out
+
+scale :
+	go test -v ./src/scale_test
