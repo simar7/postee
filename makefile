@@ -53,4 +53,4 @@ cover :
 	go tool cover -html=formatting.out
 
 scale :
-	go test -v ./src/scale_test
+	TEST_URL="http://localhost" TEST_PORT="8082" TEST_COUNT="5" go test -v ./src/scale_test

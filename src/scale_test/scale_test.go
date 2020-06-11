@@ -4,39 +4,85 @@ import (
 	"bytes"
 	"fmt"
 	"net/http"
+	"os"
+	"strconv"
 	"sync"
 	"testing"
 )
 
+const defaultCount = 10
+
 var (
 	wg sync.WaitGroup
+	url string
+	port string
+	count int
 )
 
 func sendWebhook(image, registry int) error  {
 	digest := fmt.Sprintf("%d-%d", image, registry)
 	msg := buildMessage(digest, image, registry)
 	r := bytes.NewReader([]byte(msg))
-	_, err := http.Post("http://localhost:8082", "application/json", r)
+	resp, err := http.Post( url+":"+port, "application/json", r)
 	wg.Done()
-	return err
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("Wrong status: %v\n", err)
+	}
+	return nil
+}
+
+func TestMain(m *testing.M)  {
+	url = os.Getenv("TEST_URL")
+	if len(url) == 0 {
+		url = "http://localhost"
+	}
+	port = os.Getenv("TEST_PORT")
+	if len(port) == 0 {
+		port = "8082"
+	}
+	c := os.Getenv("TEST_COUNT")
+	if len(c) > 0 {
+		var err error
+		count, err = strconv.Atoi(c)
+		if err != nil {
+			count = defaultCount
+		}
+	} else {
+		count = defaultCount
+	}
+	m.Run()
 }
 
 func TestSendSameMessages(t *testing.T) {
-	const count = 1000
+	t.Logf("Start sending %d message to %s:%s", count, url, port)
 	imageId := 999
 	regId := 999
 	for i:=0; i < count; i++ {
 		wg.Add(1)
-		go sendWebhook(imageId, regId)
+		go func(imageId, regId int) {
+			err := sendWebhook(imageId, regId)
+			if err != nil {
+				t.Errorf("Error: %v", err)
+			}
+		}(imageId, regId)
 	}
 	wg.Wait()
 }
 
 func TestSendUniqueMessages(t *testing.T) {
-	const count = 1000
+	t.Logf("Start sendting %d message to %s:%s", count, url, port)
 	for i:=0; i < count; i++ {
 		wg.Add(1)
-		go sendWebhook(i, i)
+		go func(imageId, regId int) {
+			err := sendWebhook(imageId, regId)
+			if err != nil {
+				t.Errorf("Error: %v", err)
+			}
+		}(i, i)
 	}
 	wg.Wait()
 }
