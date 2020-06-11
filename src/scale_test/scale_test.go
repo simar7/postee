@@ -22,9 +22,9 @@ func sendWebhook(image, registry int) error  {
 }
 
 func TestSendSameMessages(t *testing.T) {
-	const count = 5
-	imageId := 27
-	regId := 25
+	const count = 1000
+	imageId := 999
+	regId := 999
 	for i:=0; i < count; i++ {
 		wg.Add(1)
 		go sendWebhook(imageId, regId)
