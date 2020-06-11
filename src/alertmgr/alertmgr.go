@@ -114,6 +114,12 @@ func buildSettings(sourceSettings *PluginSettings) *settings.Settings {
 	}
 }
 
+func buildPrnPlugin(sourceSettings *PluginSettings)  *plugins.PrnPlugin {
+	prn := &plugins.PrnPlugin{}
+	prn.PrnSetting = buildSettings(sourceSettings)
+	return prn
+}
+
 func buildServiceNow (sourceSettings *PluginSettings) *plugins.ServiceNowPlugin{
 	serviceNow := &plugins.ServiceNowPlugin{
 		User:     sourceSettings.User,
@@ -267,6 +273,9 @@ func (ctx *AlertMgr) load() error {
 				ctx.plugins[settings.Name].Init()
 			case "serviceNow":
 				ctx.plugins[settings.Name] = buildServiceNow(&settings)
+				ctx.plugins[settings.Name].Init()
+			case "prn":
+				ctx.plugins[settings.Name] = buildPrnPlugin(&settings)
 				ctx.plugins[settings.Name].Init()
 			default:
 				log.Printf("Plugin type %q is undefined or empty. Plugin name is %q.",
