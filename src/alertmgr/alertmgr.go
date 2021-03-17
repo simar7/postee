@@ -153,6 +153,10 @@ func buildSettings(sourceSettings *PluginSettings) *settings.Settings {
 	}
 }
 
+func buildOpsGeniePlugin(sourceSettings *PluginSettings) *plugins.OpsGeniePlugin {
+	return &plugins.OpsGeniePlugin{OpsGenieSettings: buildSettings(sourceSettings)}
+}
+
 func buildSplunkPlugin(sourceSettings *PluginSettings) *plugins.SplunkPlugin {
 	return &plugins.SplunkPlugin{
 		Url:            sourceSettings.Url,
