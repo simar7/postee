@@ -1,0 +1,12 @@
+# Postee Runner gets its configuration from the Postee Controller
+# it only needs to be identified as one and given the keys to communicate
+# to the Postee Controller
+
+version: v0.1
+type: runner
+
+# This config is optional as an equivalent Postee Runner can be started with
+# cmdline params: -name="postee-runner-1" and "postee-key=foo-bar-baz"
+config:
+  name: postee-runner-1
+  postee-key: "foo-bar-baz"     # If running auth between controller <-> runner
