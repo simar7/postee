@@ -6,32 +6,32 @@ input: contains(input.SigMetadata.ID, "TRC-2")
 jobs:
   "Kill bad process, send logs job":
     runs-on: "postee-runner-1"
-    - name: "Kill bad process"
-      uses-action: "my-kill-exec-action"
-      type: exec
-      with:
-        env: [ "MY_ENV_VAR=foo_bar_baz", "MY_KEY=secret" ]     # Optional. Any environment variables to pass in
-        exec-script: |                                       # Specify the script to run
-          #!/bin/sh
-          kill -SIGTERM event.input.SigMetadata.ProcessName
+    steps:
+      - name: "Kill bad process"
+        uses-action: "my-kill-exec-action"
+        type: exec
+        with:
+          env: "MY_ENV_VAR=foo_bar_baz, MY_KEY=secret"     # Optional. Any environment variables to pass in
+          exec-script: |
+            #!/bin/sh
+            kill -SIGTERM event.input.SigMetadata.ProcessName
 
-    - name: "Send logs"
-      uses-action: "my-http-post-action"
-      type: exec
-      with:
-        url: "https://my-fancy-url.com"       # Required. URL of the HTTP Request
-        method: POST                          # Required. Method to use. CONNECT is not supported at this time
-        headers:                              # Optional. Headers to pass in for the request.
-          "Foo": [ "bar" ]
-          "Haz": [ "baz" ]
-        timeout: 10s                          # Optional. Timeout value in XX(s,m,h)
-        body-content: |                       # Optional. Body inline content of the HTTP request
-          This is an example of a inline body
-          Event ID: event.input.Signature.ID
+      - name: "Send logs"
+        uses-action: "my-http-post-action"
+        type: exec
+        with:
+          url: "https://my-fancy-url.com"       # Required. URL of the HTTP Request
+          method: POST                          # Required. Method to use. CONNECT is not supported at this time
+          headers: "foo=bar, haz=baz"            # Optional. Headers to pass in for the request.
+          timeout: 10s                          # Optional. Timeout value in XX(s,m,h)
+          body-content: |                       
+            This is an example of a inline body
+            Event ID: event.input.Signature.ID
 
   "Send notification messages":
     runs-on: "postee-runner-2"
     parallelize: true
+    steps:
     - name: "Send slack message"
       uses-action: "my-slack-action"
       type: slack
@@ -40,6 +40,7 @@ jobs:
 
   "Inform on-call staff":
     runs-on: "self"                     # self is a special keyword to identify itself, default: self
+    steps:
     - name: "Create JIRA ticket"
       uses-action: "my-jira-ticket-action"
       type: jira
