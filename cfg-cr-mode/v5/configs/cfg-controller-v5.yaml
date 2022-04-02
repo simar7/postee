@@ -1,0 +1,43 @@
+version: v0.5
+type: controller
+name: Postee-CA-Demo
+
+runner-configs:
+- name: "postee-runner-1"
+  input: contains(input.image, "alpine")
+  jobs:
+  - name: "Send slack message"
+    uses-action: "my-slack-action"
+    type: slack
+    with:
+      url: https://hooks.slack.com/services/TAAAA/BBB/<key>
+
+- name: "postee-runner-2"
+  input: contains(input.SigMetadata.ID, "TRC-2")
+  jobs:
+  - name: "Kill bad process"
+    uses-action: "my-kill-exec-action"
+    type: exec
+    with:
+      env: "MY_ENV_VAR=foo_bar_baz, MY_KEY=secret"
+      exec-script: |
+        #!/bin/sh
+        kill -SIGTERM event.input.SigMetadata.ProcessName
+
+- name: "postee-runner-3"
+  input: contains(input.SigMetadata.ID, "TRC-3")
+  jobs:
+  - name: "Create JIRA ticket"
+    uses-action: "my-jira-ticket-action"
+    type: jira
+    with:
+      url: "foo.atlassian.com"
+      user: "johndoe@example.com"
+      project-key:  "PRJ"
+
+  - name: "Page on-call engineer"
+    uses-action: "my-pagerduty-action"
+    type: pagerduty
+    with:
+      api-key: "hunter123"
+      severity: "SEV-1"
