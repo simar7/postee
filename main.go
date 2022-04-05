@@ -8,6 +8,8 @@ import (
 	"runtime"
 	"syscall"
 
+	"github.com/nats-io/nats.go"
+
 	"github.com/aquasecurity/postee/v2/dbservice"
 	"github.com/aquasecurity/postee/v2/router"
 	"github.com/aquasecurity/postee/v2/utils"
@@ -22,14 +24,16 @@ const (
 	TLS_USAGE = "The TLS socket to bind to, specified using host:port."
 	//	CFG_USAGE  = "The folder which contains alert configuration files."
 	//	CFG_FOLDER = "/config/"
-	CFG_FILE  = "/config/cfg.yaml"
-	CFG_USAGE = "The alert configuration file."
+	CFG_FILE     = "/config/cfg.yaml"
+	CFG_USAGE    = "The alert configuration file."
+	RUNNER_USAGE = "If running Postee in Runner mode, a runner configuration is required"
 )
 
 var (
-	url     = ""
-	tls     = ""
-	cfgfile = ""
+	url       = ""
+	tls       = ""
+	cfgfile   = ""
+	runnerCfg = ""
 )
 
 var rootCmd = &cobra.Command{
@@ -42,6 +46,8 @@ func init() {
 	rootCmd.Flags().StringVar(&url, "url", URL, URL_USAGE)
 	rootCmd.Flags().StringVar(&tls, "tls", TLS, TLS_USAGE)
 	rootCmd.Flags().StringVar(&cfgfile, "cfgfile", CFG_FILE, CFG_USAGE)
+
+	rootCmd.Flags().StringVar(&runnerCfg, "runner-config-file", "", RUNNER_USAGE)
 }
 
 func main() {
@@ -76,6 +82,19 @@ func main() {
 
 		if os.Getenv("PATH_TO_DB") != "" {
 			dbservice.SetNewDbPathFromEnv()
+		}
+
+		// TODO: Add a runner mode flag to guard this branch
+		posteeControllerURL := "nats://0.0.0.0:4222" // TODO: Move to cmdline option
+		if posteeControllerURL != "" && cfgfile == "" {
+			nc, err := nats.Connect(posteeControllerURL, nil)
+			if err != nil {
+				panic(err)
+			}
+
+			nc.Subscribe("config.postee", func(msg *nats.Msg) { // TODO: Allow to pass in runner name (subject here) via cmdline
+				cfgfile = string(msg.Data)
+			})
 		}
 
 		err := router.Instance().Start(cfgfile)

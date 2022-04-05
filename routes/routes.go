@@ -8,6 +8,7 @@ type InputRoute struct {
 	Plugins          Plugins  `json:"plugins"`
 	Template         string   `json:"template"`
 	SerializeOutputs bool     `json:"serialize-outputs"`
+	RunsOn           string   `json:"runs-on"`
 	Scheduling       chan struct{}
 }
 

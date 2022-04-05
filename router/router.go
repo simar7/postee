@@ -12,6 +12,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/nats-io/nats-server/v2/server"
+
+	"github.com/nats-io/nats.go"
+
 	"github.com/aquasecurity/postee/v2/data"
 	"github.com/aquasecurity/postee/v2/dbservice"
 	"github.com/aquasecurity/postee/v2/formatting"
@@ -28,16 +32,19 @@ const (
 )
 
 type Router struct {
-	mutexScan   sync.Mutex
-	quit        chan struct{}
-	queue       chan []byte
-	ticker      *time.Ticker
-	stopTicker  chan struct{}
-	cfgfile     string
-	aquaServer  string
-	outputs     map[string]outputs.Output
-	inputRoutes map[string]*routes.InputRoute
-	templates   map[string]data.Inpteval
+	natsServer *server.Server
+
+	mutexScan    sync.Mutex
+	quit         chan struct{}
+	queue        chan []byte
+	subjectQueue chan []byte
+	ticker       *time.Ticker
+	stopTicker   chan struct{}
+	cfgfile      string
+	aquaServer   string
+	outputs      map[string]outputs.Output
+	inputRoutes  map[string]*routes.InputRoute
+	templates    map[string]data.Inpteval
 }
 
 var (
@@ -51,8 +58,14 @@ var (
 )
 
 func Instance() *Router {
+	ns, err := server.NewServer(&server.Options{})
+	if err != nil {
+		panic(err)
+	}
+
 	initCtx.Do(func() {
 		routerCtx = &Router{
+			natsServer:  ns,
 			mutexScan:   sync.Mutex{},
 			quit:        make(chan struct{}),
 			queue:       make(chan []byte, 1000),
@@ -86,7 +99,15 @@ func (ctx *Router) Start(cfgfile string) error {
 	if err != nil {
 		return err
 	}
+
+	go ctx.natsServer.Start()
+	if !ctx.natsServer.ReadyForConnections(10 * time.Second) {
+		panic("not ready for connections")
+	}
+	fmt.Println(">>>> Listening on: ", ctx.natsServer.ClientURL())
+
 	go ctx.listen()
+
 	return nil
 }
 
@@ -263,6 +284,24 @@ func (ctx *Router) HandleRoute(routeName string, in []byte) {
 		return
 	}
 
+	// this is a route to run on a runner
+	if r.RunsOn != "" { // TODO: Check for !RunnerMode() to be true
+		fmt.Println(">>>>>> in: ", string(in))
+		nc, err := nats.Connect(ctx.natsServer.ClientURL())
+		if err != nil {
+			panic(err)
+		}
+
+		//fmt.Println("forwarding route config to runner: ", r.RunsOn)
+		//fileContents, _ := ioutil.ReadFile(ctx.cfgfile)
+		//nc.Publish(r.RunsOn, fileContents)
+
+		subj := "events." + r.RunsOn
+		fmt.Println(">>> forwarding event to runner: ", subj, "event: ", string(in))
+		nc.Publish(subj, in)
+		return
+	}
+
 	if !getScanService().EvaluateRegoRule(r, in) {
 		return
 	}
@@ -381,8 +420,31 @@ func BuildAndInitOtpt(settings *OutputSettings, aquaServerUrl string) outputs.Ou
 }
 
 func (ctx *Router) listen() {
+	//ticker := time.NewTicker(10 * time.Second)
+	//done := make(chan bool)
+
+	configCh := make(chan *nats.Msg)
+	nc, err := nats.Connect(ctx.natsServer.ClientURL())
+	if err != nil {
+		panic(err)
+	}
+
+	nc.ChanSubscribe("config.postee", configCh)
+
 	for {
 		select {
+		case msg := <-configCh:
+			fmt.Println(">>> someone request config", string(msg.Data))
+			b, _ := ioutil.ReadFile(ctx.cfgfile)
+			msg.Respond(b)
+		//case <-ticker.C:
+		//	nc, err := nats.Connect(ctx.natsServer.ClientURL())
+		//	if err != nil {
+		//		panic(err)
+		//	}
+		//	fmt.Println(">>> publishing cfg event")
+		//	b, _ := ioutil.ReadFile(ctx.cfgfile)
+		//	nc.Publish("config.postee", b)
 		case <-ctx.quit:
 			return
 		case data := <-ctx.queue:
