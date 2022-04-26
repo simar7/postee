@@ -278,18 +278,41 @@ func (ctx *Router) HandleRoute(routeName string, in []byte) {
 		return
 	}
 
-	if !getScanService().EvaluateRegoRule(r, in) {
-		if ctx.Mode == "runner" {
-			log.Println("Rego rule did not match, sending event upstream to controller at url: ", ctx.ControllerURL)
-			NATSEventSubject := "postee.events"
-			if err := ctx.NatsConn.Publish(NATSEventSubject, in); err != nil {
-				panic(err)
-			}
+	// send event up to controller unconditionally, in case controller knows
+	if ctx.Mode == "runner" {
+		log.Println("Sending event upstream to controller at url: ", ctx.ControllerURL)
+		NATSEventSubject := "postee.events"
+		if err := ctx.NatsConn.Publish(NATSEventSubject, in); err != nil {
+			panic(err)
 		}
+	}
+
+	if !getScanService().EvaluateRegoRule(r, in) {
 		return
 	}
 
 	for _, outputName := range r.Outputs {
+		handle := true
+		if ctx.Mode == "controller" {
+			tenant, err := Parsev2cfg(ctx.cfgfile)
+			if err != nil {
+				log.Fatal("unable to parse cfgfile for controller: ", err)
+			}
+			for _, o := range tenant.Outputs {
+				if outputName == o.Name {
+					if o.RunsOn != "" {
+						log.Println("Skipping: ", o.Name, "as it is for runner: ", o.RunsOn)
+						handle = false
+						break // skip as it is for runner to run
+					}
+				}
+			}
+		}
+
+		if !handle {
+			continue
+		}
+
 		pl, ok := ctx.outputs[outputName]
 		if !ok {
 			log.Printf("route %q contains an output %q, which isn't enabled now.", routeName, outputName)
@@ -434,21 +457,23 @@ func buildRunnerConfig(runnerName, cfgFile string) (string, error) {
 	var runnerOutputs []OutputSettings
 	var runnerTemplates []Template
 
-	for _, route := range tenant.InputRoutes {
-		if route.RunsOn == runnerName {
-			runnerRoutes = append(runnerRoutes, route)
+	for _, output := range tenant.Outputs {
+		if output.RunsOn == runnerName {
+			runnerOutputs = append(runnerOutputs, output)
 		}
 	}
 
-	for _, rr := range runnerRoutes {
+	for _, ro := range runnerOutputs {
 		for _, inputRoute := range tenant.InputRoutes {
-			if inputRoute.Name == rr.Name {
-				for _, inputOutput := range tenant.Outputs {
-					for _, runnerOutput := range rr.Outputs {
-						if runnerOutput == inputOutput.Name {
-							runnerOutputs = append(runnerOutputs, inputOutput)
-						}
+			for _, inputOutput := range inputRoute.Outputs {
+				if ro.Name == inputOutput {
+					runnerRoute := inputRoute
+					var oNames []string
+					for _, o := range runnerOutputs {
+						oNames = append(oNames, o.Name)
 					}
+					runnerRoute.Outputs = oNames
+					runnerRoutes = append(runnerRoutes, runnerRoute)
 				}
 			}
 		}

@@ -3,6 +3,7 @@ package router
 type OutputSettings struct {
 	Name              string                       `json:"name,omitempty"`
 	Type              string                       `json:"type,omitempty"`
+	RunsOn            string                       `json:"runs-on,omitempty"`
 	Enable            bool                         `json:"enable,omitempty"`
 	Url               string                       `json:"url,omitempty"`
 	User              string                       `json:"user,omitempty"`
