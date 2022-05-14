@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -10,12 +11,12 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/nats-io/nats-server/v2/server"
-
 	"github.com/aquasecurity/postee/v2/dbservice"
 	"github.com/aquasecurity/postee/v2/router"
 	"github.com/aquasecurity/postee/v2/utils"
 	"github.com/aquasecurity/postee/v2/webserver"
+	goyaml "github.com/goccy/go-yaml"
+	"github.com/nats-io/nats-server/v2/server"
 	"github.com/nats-io/nats.go"
 	"github.com/spf13/cobra"
 )
@@ -37,8 +38,12 @@ var (
 	tls            = ""
 	cfgfile        = ""
 	controllerMode = false
-	runnerName     = ""
+	tlsNatsMode    = false
 	controllerURL  = ""
+
+	runnerName        = ""
+	runnerTLSCertPath = ""
+	runnerTLSKeyPath  = ""
 )
 
 var rootCmd = &cobra.Command{
@@ -52,9 +57,13 @@ func init() {
 	rootCmd.Flags().StringVar(&tls, "tls", TLS, TLS_USAGE)
 	rootCmd.Flags().StringVar(&cfgfile, "cfgfile", CFG_FILE, CFG_USAGE)
 
-	rootCmd.Flags().StringVar(&runnerName, "runner-name", "", "postee runner name")
+	rootCmd.Flags().BoolVar(&tlsNatsMode, "tlsNATS", false, "enable tls on controller/runner comms")
 	rootCmd.Flags().StringVar(&controllerURL, "controller-url", "", "postee controller URL")
 	rootCmd.Flags().BoolVar(&controllerMode, "controller-mode", false, "run postee in controller mode")
+
+	rootCmd.Flags().StringVar(&runnerName, "runner-name", "", "postee runner name")
+	rootCmd.Flags().StringVar(&runnerTLSCertPath, "runner-tls-cert", "", "postee runner tls cert file")
+	rootCmd.Flags().StringVar(&runnerTLSKeyPath, "runner-tls-key", "", "postee runner tls key file")
 }
 
 func main() {
@@ -63,6 +72,10 @@ func main() {
 
 	rootCmd.Run = func(cmd *cobra.Command, args []string) {
 		r := router.Instance()
+
+		//rootDir, _ := utils.GetRootDir()
+		//certPem := filepath.Join(rootDir, "server-cert.pem")
+		//keyPem := filepath.Join(rootDir, "server-key.pem")
 
 		if runnerName != "" {
 			log.Println("Running in runner mode")
@@ -74,10 +87,41 @@ func main() {
 				log.Fatal("Runner mode requires a valid controller url")
 			}
 
+			//var runnerCert, runnerKey string
+			if tlsNatsMode {
+				//config, err := ioutil.ReadFile(cfgfile)
+				//if err != nil {
+				//	panic(err)
+				//}
+
+				//runnerCert = os.Getenv("RUNNER_CERT_PEM")
+				//runnerKey = os.Getenv("RUNNER_KEY_PEM")
+
+				//controllerCertPath, err := goyaml.PathString(fmt.Sprintf("$.tls.%s.cert", runnerName))
+				//if err != nil {
+				//	panic(err)
+				//}
+				//if err := controllerCertPath.Read(bytes.NewReader(config), &runnerCert); err != nil {
+				//	panic(err)
+				//}
+				//
+				//controllerKeyPath, err := goyaml.PathString(fmt.Sprintf("$.tls.%s.key", runnerName))
+				//if err != nil {
+				//	panic(err)
+				//}
+				//if err := controllerKeyPath.Read(bytes.NewReader(config), &runnerKey); err != nil {
+				//	panic(err)
+				//}
+			}
+
 			var err error
-			r.NatsConn, err = nats.Connect(controllerURL, router.SetupConnOptions(nil)...)
+			if tlsNatsMode {
+				r.NatsConn, err = nats.Connect(controllerURL, nats.ClientCert(runnerTLSCertPath, runnerTLSKeyPath))
+			} else {
+				r.NatsConn, err = nats.Connect(controllerURL, router.SetupConnOptions(nil)...)
+			}
 			if err != nil {
-				log.Fatal("Unable to connect to controller at url: ", controllerURL, "err: ", err)
+				log.Fatal("Unable to connect to controller at url: ", controllerURL, " err: ", err)
 			}
 
 			msg, err := r.NatsConn.Request(NATSConfigSubject, []byte(runnerName), time.Second*5)
@@ -105,6 +149,47 @@ func main() {
 		}
 
 		if controllerMode {
+			var controllerCert, controllerKey string
+			var runnerCert, runnerKey string
+			if tlsNatsMode {
+				config, err := ioutil.ReadFile(cfgfile)
+				if err != nil {
+					panic(err)
+				}
+
+				controllerCertPath, err := goyaml.PathString("$.tls.controller.cert")
+				if err != nil {
+					panic(err)
+				}
+				if err := controllerCertPath.Read(bytes.NewReader(config), &controllerCert); err != nil {
+					panic(err)
+				}
+
+				controllerKeyPath, err := goyaml.PathString("$.tls.controller.key")
+				if err != nil {
+					panic(err)
+				}
+				if err := controllerKeyPath.Read(bytes.NewReader(config), &controllerKey); err != nil {
+					panic(err)
+				}
+
+				runnerCertPath, err := goyaml.PathString("$.tls.runner.cert")
+				if err != nil {
+					panic(err)
+				}
+				if err := runnerCertPath.Read(bytes.NewReader(config), &runnerCert); err != nil {
+					panic(err)
+				}
+
+				runnerKeyPath, err := goyaml.PathString("$.tls.runner.key")
+				if err != nil {
+					panic(err)
+				}
+				if err := runnerKeyPath.Read(bytes.NewReader(config), &runnerKey); err != nil {
+					panic(err)
+				}
+			}
+
 			log.Println("Running in controller mode")
 			if runnerName != "" {
 				log.Fatal("Postee cannot run as a runner when running in controller mode")
@@ -114,7 +199,18 @@ func main() {
 			var natsServer *server.Server
 
 			var err error
-			natsServer, err = server.NewServer(&server.Options{})
+			if tlsNatsMode {
+				tlsConfig, err := server.GenTLSConfig(&server.TLSConfigOpts{
+					CertFile: controllerCert,
+					KeyFile:  controllerKey,
+				})
+				if err != nil {
+					log.Fatal(err)
+				}
+				natsServer, err = server.NewServer(&server.Options{TLSConfig: tlsConfig, Host: "localhost"})
+			} else {
+				natsServer, err = server.NewServer(&server.Options{})
+			}
 			if err != nil {
 				log.Fatal("Unable to start controller backplane: ", err)
 			}
@@ -124,7 +220,12 @@ func main() {
 			}
 
 			configCh = make(chan *nats.Msg)
-			nc, err := nats.Connect(natsServer.ClientURL(), router.SetupConnOptions(nil)...)
+			var nc *nats.Conn
+			if tlsNatsMode {
+				nc, err = nats.Connect(natsServer.ClientURL(), nats.ClientCert(runnerCert, runnerKey))
+			} else {
+				nc, err = nats.Connect(natsServer.ClientURL(), router.SetupConnOptions(nil)...)
+			}
 			if err != nil {
 				log.Fatal("Unable to setup controller: ", err)
 			}
