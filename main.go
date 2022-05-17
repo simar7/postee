@@ -1,6 +1,7 @@
 package main
 
 import (
+	gotls "crypto/tls"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -129,14 +130,15 @@ func main() {
 
 			var err error
 			if controllerTLSKeyPath != "" && controllerTLSCertPath != "" {
-				tlsConfig, err := server.GenTLSConfig(&server.TLSConfigOpts{
+				var tlsConfig *gotls.Config
+				tlsConfig, err = server.GenTLSConfig(&server.TLSConfigOpts{
 					CertFile: controllerTLSCertPath,
 					KeyFile:  controllerTLSKeyPath,
 				})
 				if err != nil {
-					log.Fatal(err)
+					log.Fatal("Invalid TLS config: ", err)
 				}
-				natsServer, err = server.NewServer(&server.Options{TLSConfig: tlsConfig, Host: "localhost", AllowNonTLS: true, NoAuthUser: "demo-user", NoLog: true})
+				natsServer, err = server.NewServer(&server.Options{TLSConfig: tlsConfig})
 			} else {
 				natsServer, err = server.NewServer(&server.Options{})
 			}
@@ -148,16 +150,10 @@ func main() {
 				log.Fatal("Controller backplane is not ready to receive connections, try restarting controller")
 			}
 
+			log.Println("Controller listening for requests on: ", natsServer.ClientURL())
 			configCh = make(chan *nats.Msg)
 			var nc *nats.Conn
-			//if runnerTLSKeyPath != "" && runnerTLSCertPath != "" {
-			//if controllerTLSCertPath != "" && controllerTLSKeyPath != "" {
-			//	fmt.Println(">> running in tls controller")
-			//nc, err = nats.Connect(natsServer.ClientURL(), nats.ClientCert(runnerTLSCertPath, runnerTLSKeyPath))
-			//nc, err = nats.Connect(natsServer.ClientURL(), nats.ClientCert(controllerTLSCertPath, controllerTLSKeyPath))
-			//} else {
-			nc, err = nats.Connect(natsServer.ClientURL(), router.SetupConnOptions([]nats.Option{nats.UserInfo("demo-user", "")})...)
-			//}
+			nc, err = nats.Connect(natsServer.ClientURL(), router.SetupConnOptions(nil)...)
 			if err != nil {
 				log.Fatal("Unable to setup controller: ", err)
 			}
