@@ -132,7 +132,7 @@ result = msg {
     input.url, input.url,
     render_table([], severities_stats("vulnerability"), "50%"),
     render_table([], severities_stats("misconfiguration"), "50%"),
-    render_table([], severities_stats("pipeline_misconfiguration"), "50%"),,
+    render_table([], severities_stats("pipeline_misconfiguration"), "50%"),
     with_default(input, "response_policy_name", "none"),
     with_default(input, "application_scope", "none")
     ])
