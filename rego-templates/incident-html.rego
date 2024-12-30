@@ -224,7 +224,7 @@ result = msg {
         input.name,
         input.url,
         input.url,
-        sprintf("%v", [parsed_data.result]),
+        sprintf("%v", [with_default(parsed_data, "result", 0)]),
         parsed_data.malware,
         parsed_data.hostip,
         parsed_data.malware_type,
